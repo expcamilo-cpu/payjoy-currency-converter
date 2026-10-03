@@ -1,15 +1,21 @@
+import os
 import requests
 from fastapi import FastAPI, HTTPException, Query
+from dotenv import load_dotenv
 from iso4217 import Currency
+
+load_dotenv()
+
+API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
+if not API_KEY:
+    raise ValueError("Missing EXCHANGE_RATE_API_KEY in the .env file")
 
 app = FastAPI(
     title="PayJoy Currency Converter API",
     description="Converts USD amounts to local currencies for the PayJoy chatbot.",
-    version="0.4.0",
+    version="1.0.0",
 )
 
-# TODO: move this to an environment variable in a later commit
-API_KEY = "REDACTED_EXCHANGERATE_KEY"
 EXCHANGE_API_URL = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/USD"
 
 
