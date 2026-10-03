@@ -6,17 +6,52 @@ from iso4217 import Currency
 
 load_dotenv()
 
-API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
-if not API_KEY:
+EXCHANGERATE_API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
+FASTFOREX_API_KEY = os.getenv("FASTFOREX_API_KEY")
+
+if not EXCHANGERATE_API_KEY:
     raise ValueError("Missing EXCHANGE_RATE_API_KEY in the .env file")
+if not FASTFOREX_API_KEY:
+    raise ValueError("Missing FASTFOREX_API_KEY in the .env file")
 
 app = FastAPI(
     title="PayJoy Currency Converter API",
-    description="Converts USD amounts to local currencies for the PayJoy chatbot.",
-    version="1.0.0",
+    description="Converts USD amounts to local currencies with automatic failover between providers.",
+    version="1.1.0",
 )
 
-EXCHANGE_API_URL = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/USD"
+
+def get_rate_from_exchangerate(target: str) -> float:
+    """Primary provider: ExchangeRate-API v6."""
+    url = f"https://v6.exchangerate-api.com/v6/{EXCHANGERATE_API_KEY}/latest/USD"
+    response = requests.get(url, timeout=10)
+    response.raise_for_status()
+    data = response.json()
+
+    if data.get("result") != "success":
+        raise ValueError("ExchangeRate-API returned an error.")
+
+    rates = data.get("conversion_rates", {})
+    if target not in rates:
+        raise ValueError(f"Currency {target} not supported by ExchangeRate-API.")
+
+    return rates[target]
+
+
+def get_rate_from_fastforex(target: str) -> float:
+    """Fallback provider: FastForex."""
+    url = "https://api.fastforex.io/fetch-one"
+    headers = {"X-API-Key": FASTFOREX_API_KEY}
+    params = {"from": "USD", "to": target}
+    response = requests.get(url, headers=headers, params=params, timeout=10)
+    response.raise_for_status()
+    data = response.json()
+
+    result = data.get("result", {})
+    if target not in result:
+        raise ValueError(f"Currency {target} not supported by FastForex.")
+
+    return result[target]
 
 
 @app.get("/convert")
@@ -33,35 +68,42 @@ async def convert_currency(
             detail=f"Invalid currency code: '{currency}'. Please use a valid ISO 4217 code (e.g., BRL, MXN, PHP)."
         )
 
-    # Call the external exchange rate API
+    target = currency.upper()
+    rate = None
+    provider = None
+    errors = []
+
+    # Try primary provider
     try:
-        response = requests.get(EXCHANGE_API_URL, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+        rate = get_rate_from_exchangerate(target)
+        provider = "exchangerate-api"
+    except (requests.RequestException, ValueError) as e:
+        errors.append(f"exchangerate-api: {e}")
 
-        if data.get("result") != "success":
-            raise HTTPException(status_code=502, detail="The exchange rate API returned an error.")
+    # If primary fails, try fallback
+    if rate is None:
+        try:
+            rate = get_rate_from_fastforex(target)
+            provider = "fastforex (fallback)"
+        except (requests.RequestException, ValueError) as e:
+            errors.append(f"fastforex: {e}")
 
-        rates = data.get("conversion_rates", {})
-        target = currency.upper()
+    # If both fail, return 502
+    if rate is None:
+        raise HTTPException(
+            status_code=502,
+            detail=f"All exchange rate providers failed: {'; '.join(errors)}"
+        )
 
-        if target not in rates:
-            raise HTTPException(status_code=400, detail=f"Currency not supported by the API: {target}")
+    converted = round(amount * rate, 2)
 
-        rate = rates[target]
-        converted = round(amount * rate, 2)
-
-        return {
-            "amount_usd": amount,
-            "currency": target,
-            "converted": converted,
-            "rate": rate,
-        }
-
-    except requests.exceptions.Timeout:
-        raise HTTPException(status_code=504, detail="Request to the exchange rate API timed out.")
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=502, detail=f"Error connecting to the exchange rate API: {e}")
+    return {
+        "amount_usd": amount,
+        "currency": target,
+        "converted": converted,
+        "rate": rate,
+        "provider": provider,
+    }
 
 
 @app.get("/health")
