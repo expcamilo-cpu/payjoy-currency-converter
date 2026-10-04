@@ -112,6 +112,7 @@ The `.env` file is excluded from version control via `.gitignore`. A `.env.examp
 - **Clear error handling:** HTTP 400 for validation errors, 502 for external provider failures, 504 for timeouts.
 - **Automatic failover between providers:** if ExchangeRate-API fails (timeout, error, invalid account), the API automatically retries with FastForex. The response includes a `provider` field for observability.
 - **Fail-fast on startup:** the app refuses to start if either API key is missing, avoiding silent misconfigurations.
+- **Scope discipline:** I deliberately did not implement caching in this version to avoid over-engineering. At the expected load for a technical assessment (< 30 conversions/day), the free tier is more than sufficient. Caching is listed as the first improvement to make under real production load.
 
 ## Project Structure
 
@@ -133,6 +134,7 @@ payjoy-currency-converter/
 - CI/CD pipeline with GitHub Actions.
 - Add an alert when fallback rate exceeds a threshold (e.g., > 5% of requests).
 - Circuit breaker pattern to avoid hammering a provider that is down.
+- **TTL cache for the exchange rate table:** cache the entire `/latest/USD` response in memory for ~1 hour. Since ExchangeRate-API's free tier refreshes rates roughly every 24h, a 1-hour TTL would be conservative and safe. This would reduce API consumption from 1 request per conversion to 1 per TTL window. In a multi-worker deployment, this cache would need to be shared (Redis) instead of in-memory.
 
 ## Success Metrics in Production
 
