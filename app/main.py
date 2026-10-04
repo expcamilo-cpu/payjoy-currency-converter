@@ -4,9 +4,10 @@ from decimal import ROUND_HALF_UP, Decimal
 from fastapi import FastAPI, HTTPException, Query
 from iso4217 import Currency
 
-from config import settings
-from providers import ProviderError, UnsupportedCurrencyError, get_rate
-from schemas import ConversionResponse
+from app.config import settings
+from app.exceptions import ProviderError, UnsupportedCurrencyError
+from app.providers import get_rate
+from app.schemas import ConversionResponse
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,10 +15,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("payjoy.currency")
 
+
 app = FastAPI(
     title="PayJoy Currency Converter API",
     description="Converts USD amounts to local currencies with automatic failover between providers.",
-    version="1.2.0",
+    version="1.3.0",
 )
 
 
@@ -26,7 +28,6 @@ def convert_currency(
     amount: Decimal = Query(..., gt=0, description="Amount in USD. Must be > 0."),
     currency: str = Query(..., min_length=3, max_length=3, description="ISO 4217 currency code."),
 ) -> ConversionResponse:
-    # 1. Validate ISO 4217 code
     try:
         Currency(currency.upper())
     except ValueError:
@@ -37,7 +38,6 @@ def convert_currency(
 
     target = currency.upper()
 
-    # 2. Fetch rate (primary -> fallback)
     try:
         rate, provider, fallback_used = get_rate(target)
     except UnsupportedCurrencyError:
@@ -51,7 +51,6 @@ def convert_currency(
             detail="Exchange rate providers are currently unavailable.",
         )
 
-    # 3. Compute converted amount with explicit rounding
     converted = (amount * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     return ConversionResponse(

@@ -1,18 +1,39 @@
 # Environment
 .env
-.env.local
+.env.*
+!.env.example
+
+# Virtual environments
+.venv/
+venv/
+env/
 
 # Python
-.venv/
 __pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
 *.pyc
 *.pyo
-
-# IDE / OS
-.vscode/
-.DS_Store
 
 # Testing
 .pytest_cache/
 .coverage
+.coverage.*
+htmlcov/
+.tox/
 prueba.txt
+
+# Linting / type checking
+.ruff_cache/
+.mypy_cache/
+
+# macOS
+.DS_Store
+._*
+
+# IDEs
+.vscode/
+.idea/
