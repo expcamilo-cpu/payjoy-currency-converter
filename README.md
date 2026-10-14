@@ -680,6 +680,5 @@ The deployment, Landbot configuration, provider integrations, testing and
 security remediation were verified directly.
 
 
-================================================================================
 END OF README
 ================================================================================
