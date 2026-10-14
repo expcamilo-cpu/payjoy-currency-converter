@@ -1,4 +1,4 @@
-================================================================================
+
 PAYJOY - CURRENCY CONVERTER
 Technical Assessment for Automation Engineer - Tools Specialist (L2)
 ================================================================================
